@@ -26,7 +26,7 @@ class MyAssets
   bake_folder "./public_assets"
 end
 
-add_handler BakedFileHandler.new(MyAssets)
+add_handler BakedFileHandler::BakedFileHandler.new(MyAssets)
 
 Kemal.run
 ```
