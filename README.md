@@ -31,11 +31,11 @@ add_handler BakedFileHandler::BakedFileHandler.new(MyAssets)
 Kemal.run
 ```
 
-TODO: Write usage instructions here
 
 ## Development
 
-TODO: Write development instructions here
+I don't expect this need much further development. In any case,
+it's simple enough code :-)
 
 ## Contributing
 
