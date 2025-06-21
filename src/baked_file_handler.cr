@@ -1,5 +1,5 @@
 module BakedFileHandler
-  VERSION = "0.1.0"
+  VERSION = "0.1.1"
 
   # # BakedFileHandler
   #
@@ -130,7 +130,7 @@ module BakedFileHandler
         # Now that we know it exists, get it.
         io = @baked_fs_class.get(baked_key)
         extension = Path.new(baked_key).extension.to_s # .to_s handles nil if no extension
-        context.response.content_type = MIME.from_extension(extension) || "application/octet-stream"
+        context.response.content_type = MIME.from_extension?(extension) || "application/octet-stream"
         @cache_control.try { |value|
           context.response.headers["Cache-Control"] = value
         }
