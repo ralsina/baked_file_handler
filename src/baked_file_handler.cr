@@ -134,10 +134,11 @@ module BakedFileHandler
         @cache_control.try { |value|
           context.response.headers["Cache-Control"] = value
         }
-        context.response.content_length = io.size
         # For GET requests, we copy the IO content to the response.
         if context.request.method == "GET"
           IO.copy(io, context.response)
+        else
+          context.response.content_length = io.size
         end
         # Served
         Log.debug { "Successfully served baked key: '#{baked_key}'" }
