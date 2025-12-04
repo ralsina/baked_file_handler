@@ -7,3 +7,9 @@ authors:
 crystal: '>= 1.16.3'
 
 license: MIT
+
+development_dependencies:
+  kemal:
+    github: kemalcr/kemal
+  baked_file_system:
+    github: ralsina/baked_file_system

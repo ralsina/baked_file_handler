@@ -1,3 +1,5 @@
+require "baked_file_system"
+
 module BakedFileHandler
   VERSION = "0.1.1"
 
@@ -120,6 +122,16 @@ module BakedFileHandler
     private def serve_baked_key(context : HTTP::Server::Context, baked_key : String)
       Log.debug { "Attempting to serve baked key: '#{baked_key}' from #{@baked_fs_class}" }
 
+      # Try compressed versions first if client supports it
+      accept_encoding = context.request.headers["Accept-Encoding"]?
+      if accept_encoding
+        if accept_encoding.includes?("br") && serve_compressed_file(context, baked_key + ".br", "br")
+          return true
+        elsif accept_encoding.includes?("gzip") && serve_compressed_file(context, baked_key + ".gz", "gzip")
+          return true
+        end
+      end
+
       # Check for file existence in the BakedFileSystem first.
       unless @baked_fs_class.get?(baked_key)
         Log.debug { "Baked key not found: '#{baked_key}' in #{@baked_fs_class}" }
@@ -144,21 +156,51 @@ module BakedFileHandler
         Log.debug { "Successfully served baked key: '#{baked_key}'" }
         true
       rescue ex
-        # Catch errors during the actual serving process and
-        # ensure a response is sent if not already closed, to prevent hanging
-        Log.error(exception: ex) { "Error serving (already confirmed) baked key: '#{baked_key}'" }
-        unless context.response.closed?
-          begin
-            context.response.status = :internal_server_error
-            context.response.print "Error serving file."
-          rescue error : IO::Error
-            Log.warn(exception: error) { "Could not send full 500 error response for '#{baked_key}' (e.g., headers already sent or stream closed)." }
-          end
-        end
-        # Consider this handled with an error, do not fallthrough
+        Log.error(exception: ex) { "Error serving baked key: '#{baked_key}'" }
+        context.response.status = :internal_server_error
+        context.response.print "Error serving file."
         true
       ensure
-        # Ensure the IO is closed if it was opened (probably not needed)
+        io.try &.close
+      end
+    end
+
+    # Helper to serve a compressed file from BakedFileSystem.
+    private def serve_compressed_file(context : HTTP::Server::Context, compressed_key : String, encoding : String) : Bool
+      Log.debug { "Attempting to serve compressed file: '#{compressed_key}' with encoding: #{encoding}" }
+
+      # Check if compressed file exists
+      unless @baked_fs_class.get?(compressed_key)
+        Log.debug { "Compressed file not found: '#{compressed_key}'" }
+        return false
+      end
+
+      begin
+        io = @baked_fs_class.get(compressed_key)
+        # For content type, use the original file extension (remove .gz or .br)
+        original_key = compressed_key.gsub(/\.gz$|\.br$/, "")
+        extension = Path.new(original_key).extension.to_s
+        context.response.content_type = MIME.from_extension?(extension) || "application/octet-stream"
+        context.response.headers["Content-Encoding"] = encoding
+        @cache_control.try { |value|
+          context.response.headers["Cache-Control"] = value
+        }
+
+        # For GET requests, we copy the IO content to the response.
+        if context.request.method == "GET"
+          IO.copy(io, context.response)
+        else
+          context.response.content_length = io.size
+        end
+
+        Log.debug { "Successfully served compressed file: '#{compressed_key}'" }
+        true
+      rescue ex
+        Log.error(exception: ex) { "Error serving compressed file: '#{compressed_key}'" }
+        context.response.status = :internal_server_error
+        context.response.print "Error serving file."
+        true
+      ensure
         io.try &.close
       end
     end
