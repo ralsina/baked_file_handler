@@ -21,6 +21,7 @@ module BakedFileHandler
   # - Sets `Content-Type` based on file extension.
   # - Allows configuring `Cache-Control` headers.
   # - Fallthrough to the next handler if a file is not found or the method is not supported.
+  # - Optional mount path support for improved performance in busy applications.
   #
   # ## Usage:
   #
@@ -59,6 +60,7 @@ module BakedFileHandler
     @baked_fs_class : BakedFileSystem
     @serve_index_html : Bool = true
     @cache_control : String? = "max-age=604800" # Default 1 week
+    @mount_path : String
 
     # Creates a new `BakedFileHandler`.
     #
@@ -71,15 +73,20 @@ module BakedFileHandler
     #     requests to directory-like paths (e.g., `/admin/` serves `/admin/index.html`).
     #   - `cache_control`: Sets the `Cache-Control` header for successful responses.
     #     Defaults to "max-age=604800" (1 week). Set to `nil` to omit this header.
+    #   - `mount_path`: The path where this handler should be mounted. Defaults to "/".
+    #     When set to a specific path (e.g., "/assets"), the handler will only process
+    #     requests that start with that path, improving performance in busy applications.
     def initialize(
       @baked_fs_class : BakedFileSystem,
       fallthrough = true,
       @serve_index_html = true,
       @cache_control = "max-age=604800",
+      mount_path = "/",
     )
-      # Call super with a dummy public_dir, as we override `call` and don't use parent's fs logic.
+      @mount_path = mount_path.ends_with?("/") ? mount_path : "#{mount_path}/"
+      # Call super with the mount_path, as we override `call` and don't use parent's fs logic.
       # Parent's directory_listing is also made false as we don't support it.
-      super("/", fallthrough, directory_listing: false)
+      super(@mount_path, fallthrough, directory_listing: false)
     end
 
     # Overrides the main request handling method from `HTTP::StaticFileHandler`.
@@ -87,6 +94,11 @@ module BakedFileHandler
     # the `BakedFileSystem`.
     def call(context : HTTP::Server::Context)
       request_path = context.request.path
+
+      # Skip processing if request doesn't start with mount_path (unless root mount)
+      if @mount_path != "/" && !request_path.starts_with?(@mount_path)
+        return call_next(context)
+      end
 
       unless ["GET", "HEAD"].includes? context.request.method
         # Method not allowed
@@ -98,7 +110,13 @@ module BakedFileHandler
           return
         end
       end
-      baked_key = Path.posix(URI.decode(request_path)).relative_to("/").to_s
+
+      # Adjust baked key generation based on mount_path
+      baked_key = if @mount_path == "/"
+                    Path.posix(URI.decode(request_path)).relative_to("/").to_s
+                  else
+                    Path.posix(URI.decode(request_path)).relative_to(@mount_path).to_s
+                  end
 
       # Attempt to serve the direct path
       if serve_baked_key(context, baked_key)
