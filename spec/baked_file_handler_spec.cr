@@ -34,7 +34,7 @@ describe BakedFileHandler do
     end
 
     it "has correct version" do
-      BakedFileHandler::VERSION.should eq("0.1.1") # This should match the VERSION constant in src/
+      BakedFileHandler::VERSION.should eq("0.1.4") # This should match the VERSION constant in src/
     end
 
     it "can create handler with custom mount path" do
