@@ -1,7 +1,7 @@
 require "baked_file_system"
 
 module BakedFileHandler
-  VERSION = "0.1.4"
+  VERSION = {{ `shards version #{__DIR__}`.chomp.stringify }}
 
   # # BakedFileHandler
   #
